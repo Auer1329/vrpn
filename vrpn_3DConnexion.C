@@ -31,6 +31,8 @@ static const vrpn_uint16 vrpn_3DCONNEXION_SPACEEXPLORER = 0xc627;   // 50727
 static const vrpn_uint16 vrpn_3DCONNEXION_SPACEMOUSE = 50691;
 static const vrpn_uint16 vrpn_3DCONNEXION_SPACEMOUSEPRO = 50731;
 static const vrpn_uint16 vrpn_3DCONNEXION_SPACEMOUSECOMPACT = 50741;
+static const vrpn_uint16 vrpn_3DCONNEXION_SPACEMOUSEPROWIRELESSCABLE = 50737;
+// static const vrpn_uint16 vrpn_3DCONNEXION_SPACEMOUSEPROWIRELESSRECEIVER = 50738; // not connecting
 static const vrpn_uint16 vrpn_3DCONNEXION_SPACEMOUSEWIRELESS = 50735;
 static const vrpn_uint16 vrpn_3DCONNEXION_SPACEBALL5000 = 0xc621;   // 50721;
 static const vrpn_uint16 vrpn_3DCONNEXION_SPACEPILOT =  0xc625;
@@ -230,8 +232,8 @@ void vrpn_3DConnexion::decodePacket(size_t bytes, vrpn_uint8 *buffer)
   // regardless of how many bytes were in the report.  This is going to get us into trouble for
   // multi-report packets.  Instead, we should go until we've parsed all characters and add the
   // number of characters parsed each time rather than a constant 7 reports.
-  if(bytes<7) bytes=7;
-  if (bytes > 7) {
+  if(bytes<13) bytes=13;
+  if (bytes > 13) {
 	  fprintf(stderr, "vrpn_3DConnexion::decodePacket(): Long packet (%d bytes), may mis-parse\n",
 		  static_cast<int>(bytes));
   }
@@ -239,8 +241,8 @@ void vrpn_3DConnexion::decodePacket(size_t bytes, vrpn_uint8 *buffer)
   // Full reports for all of the pro devices are 7 bytes long (the first
   // byte is the report type, because this device has multiple ones the
   // HIDAPI library leaves it in the report).
-  for (size_t i = 0; i < bytes / 7; i++) {
-    vrpn_uint8 *report = buffer + (i * 7);
+  for (size_t i = 0; i < bytes / 13; i++) {
+    vrpn_uint8 *report = buffer + (i * 13);
 
     // There are three types of reports.  Parse whichever type
     // this is.
@@ -257,7 +259,8 @@ void vrpn_3DConnexion::decodePacket(size_t bytes, vrpn_uint8 *buffer)
       // by 400 and then clamp to (-1..1).
       // The first byte is the low-order byte and the second is the
       // high-order byte.
-      case 1:
+      case 1: // Translation and Rotation for 13-byte packages
+        // Translation for 7-byte packages
         channel[0] = vrpn_unbuffer_from_little_endian<vrpn_int16>(bufptr) * scale;
         if (channel[0] < -1.0) { channel[0] = -1.0; }
         if (channel[0] > 1.0) { channel[0] = 1.0; }
@@ -267,9 +270,19 @@ void vrpn_3DConnexion::decodePacket(size_t bytes, vrpn_uint8 *buffer)
         channel[2] = vrpn_unbuffer_from_little_endian<vrpn_int16>(bufptr) * scale;
         if (channel[2] < -1.0) { channel[2] = -1.0; }
         if (channel[2] > 1.0) { channel[2] = 1.0; }
+        // Rotation for 13-byte packages
+        channel[3] = vrpn_unbuffer_from_little_endian<vrpn_int16>(bufptr) * scale;
+        if (channel[3] < -1.0) { channel[3] = -1.0; }
+        if (channel[3] > 1.0) { channel[3] = 1.0; }
+        channel[4] = vrpn_unbuffer_from_little_endian<vrpn_int16>(bufptr) * scale;
+        if (channel[4] < -1.0) { channel[4] = -1.0; }
+        if (channel[4] > 1.0) { channel[4] = 1.0; }
+        channel[5] = vrpn_unbuffer_from_little_endian<vrpn_int16>(bufptr) * scale;
+        if (channel[5] < -1.0) { channel[5] = -1.0; }
+        if (channel[5] > 1.0) { channel[5] = 1.0; }
         break;
 
-      case 2:
+      case 2: // Rotation for 7-byte packages
         channel[3] = vrpn_unbuffer_from_little_endian<vrpn_int16>(bufptr) * scale;
         if (channel[3] < -1.0) { channel[3] = -1.0; }
         if (channel[3] > 1.0) { channel[3] = 1.0; }
@@ -315,6 +328,14 @@ void vrpn_3DConnexion::decodePacket(size_t bytes, vrpn_uint8 *buffer)
         break;
       }
 
+      case 23: // Battery report for wireless devices
+        // Second double byte reperents battery charge
+        // example: 3-byte package 17 64 00 for 100 percent charge
+
+        // vrpn_gettimeofday(&_timestamp, NULL);
+        // send_text_message("Battery report not implemented", _timestamp, vrpn_TEXT_WARNING);
+        break;
+
       default:
         vrpn_gettimeofday(&_timestamp, NULL);
         send_text_message("Unknown report type", _timestamp, vrpn_TEXT_WARNING);
@@ -352,6 +373,11 @@ vrpn_3DConnexion_SpaceMousePro::vrpn_3DConnexion_SpaceMousePro(const char *name,
 
 vrpn_3DConnexion_SpaceMouseCompact::vrpn_3DConnexion_SpaceMouseCompact(const char *name, vrpn_Connection *c)
     : vrpn_3DConnexion(new vrpn_HidProductAcceptor(vrpn_SPACEMOUSEWIRELESS_VENDOR, vrpn_3DCONNEXION_SPACEMOUSECOMPACT), 2, name, c, vrpn_SPACEMOUSEWIRELESS_VENDOR, vrpn_3DCONNEXION_SPACEMOUSECOMPACT)
+{
+}
+
+vrpn_3DConnexion_SpaceMouseProWirelessCable::vrpn_3DConnexion_SpaceMouseProWirelessCable(const char *name, vrpn_Connection *c)
+    : vrpn_3DConnexion(new vrpn_HidProductAcceptor(vrpn_SPACEMOUSEWIRELESS_VENDOR, vrpn_3DCONNEXION_SPACEMOUSEPROWIRELESSCABLE), 27, name, c, vrpn_SPACEMOUSEWIRELESS_VENDOR, vrpn_3DCONNEXION_SPACEMOUSEPROWIRELESSCABLE)
 {
 }
 
